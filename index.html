@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TET — Lyon → Kosovo</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@400;500&display=swap');
+
+  :root {
+    --ink:    #1a1410;
+    --paper:  #f0ebe1;
+    --dust:   #c8b89a;
+    --trail:  #e05c1a;
+    --forest: #3d6b4f;
+    --sky:    #4a7fa5;
+    --warn:   #c9a227;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--ink);
+    color: var(--paper);
+    font-family: 'Barlow', sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ── HEADER ── */
+  header {
+    background: var(--ink);
+    border-bottom: 3px solid var(--trail);
+    padding: 28px 40px 22px;
+    display: flex;
+    align-items: flex-end;
+    gap: 32px;
+    position: relative;
+    overflow: hidden;
+  }
+  header::before {
+    content: 'TET';
+    position: absolute;
+    right: -10px;
+    top: -20px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 900;
+    font-size: 200px;
+    color: rgba(255,255,255,0.03);
+    letter-spacing: -10px;
+    line-height: 1;
+    pointer-events: none;
+    user-select: none;
+  }
+  .header-label {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--trail);
+  }
+  .header-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 900;
+    font-size: 52px;
+    line-height: 1;
+    color: var(--paper);
+    letter-spacing: -1px;
+  }
+  .header-title span { color: var(--trail); }
+  .header-meta {
+    margin-left: auto;
+    text-align: right;
+    font-family: 'Barlow Condensed', sans-serif;
+  }
+  .header-meta .big { font-size: 32px; font-weight: 700; color: var(--dust); }
+  .header-meta .small { font-size: 11px; letter-spacing: 2px; color: rgba(240,235,225,0.4); text-transform: uppercase; }
+
+  /* ── LAYOUT ── */
+  .container { display: grid; grid-template-columns: 380px 1fr; min-height: calc(100vh - 120px); }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    background: #110e0b;
+    border-right: 1px solid #2a221a;
+    overflow-y: auto;
+    max-height: calc(100vh - 120px);
+    padding-bottom: 40px;
+  }
+
+  .route-summary {
+    padding: 24px 28px 20px;
+    border-bottom: 1px solid #2a221a;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+  }
+  .stat { text-align: center; }
+  .stat .val {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--trail);
+    line-height: 1;
+  }
+  .stat .lbl {
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: rgba(240,235,225,0.35);
+    margin-top: 4px;
+  }
+
+  /* ── DAYS ── */
+  .day-block {
+    border-bottom: 1px solid #2a221a;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .day-block:hover { background: #1a1410; }
+  .day-block.active { background: #1e1610; border-left: 3px solid var(--trail); }
+
+  .day-header {
+    padding: 18px 28px 14px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .day-num {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 900;
+    font-size: 36px;
+    color: var(--trail);
+    line-height: 1;
+    min-width: 42px;
+  }
+  .day-info {}
+  .day-route {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--paper);
+    line-height: 1.1;
+  }
+  .day-country {
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--dust);
+    margin-top: 3px;
+  }
+  .day-pills {
+    margin-left: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+  }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    border-radius: 2px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .pill.tet { background: rgba(224,92,26,0.2); color: var(--trail); border: 1px solid rgba(224,92,26,0.3); }
+  .pill.road { background: rgba(74,127,165,0.15); color: var(--sky); border: 1px solid rgba(74,127,165,0.3); }
+  .pill.km { background: rgba(200,184,154,0.1); color: var(--dust); border: 1px solid rgba(200,184,154,0.2); }
+
+  .day-detail {
+    padding: 0 28px 18px 84px;
+    display: none;
+  }
+  .day-block.active .day-detail { display: block; }
+
+  .tet-section {
+    background: rgba(224,92,26,0.08);
+    border-left: 2px solid var(--trail);
+    padding: 10px 14px;
+    margin-bottom: 10px;
+    border-radius: 0 4px 4px 0;
+  }
+  .tet-section .section-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--trail);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .tet-section p {
+    font-size: 13px;
+    color: rgba(240,235,225,0.65);
+    margin-top: 4px;
+    line-height: 1.5;
+  }
+
+  .tips {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .tip {
+    display: flex;
+    gap: 8px;
+    font-size: 12px;
+    color: rgba(240,235,225,0.5);
+    line-height: 1.4;
+  }
+  .tip-icon { flex-shrink: 0; font-size: 13px; margin-top: 1px; }
+
+  .night-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 12px;
+    padding: 5px 10px;
+    background: rgba(61,107,79,0.15);
+    border: 1px solid rgba(61,107,79,0.35);
+    border-radius: 3px;
+    font-size: 11px;
+    color: #7bc49a;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+
+  /* ── MAP PANEL ── */
+  .map-panel {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+  #map {
+    flex: 1;
+    min-height: 600px;
+  }
+
+  .map-legend {
+    background: var(--ink);
+    border-top: 1px solid #2a221a;
+    padding: 14px 24px;
+    display: flex;
+    gap: 28px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: rgba(240,235,225,0.45);
+  }
+  .legend-line {
+    width: 28px;
+    height: 3px;
+    border-radius: 2px;
+  }
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid currentColor;
+  }
+
+  .map-overlay {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: rgba(26,20,16,0.9);
+    border: 1px solid #2a221a;
+    border-radius: 4px;
+    padding: 12px 16px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 13px;
+    z-index: 1000;
+    max-width: 200px;
+  }
+  .map-overlay .ov-title {
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--trail);
+    margin-bottom: 8px;
+  }
+  .map-overlay .ov-line {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    color: rgba(240,235,225,0.6);
+    margin-bottom: 3px;
+  }
+  .map-overlay .ov-line strong { color: var(--paper); }
+
+  /* Leaflet popup custom */
+  .leaflet-popup-content-wrapper {
+    background: #1a1410 !important;
+    color: var(--paper) !important;
+    border: 1px solid #3a2e20 !important;
+    border-radius: 4px !important;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.6) !important;
+  }
+  .leaflet-popup-tip { background: #1a1410 !important; }
+  .leaflet-popup-content { font-family: 'Barlow', sans-serif; font-size: 13px; line-height: 1.5; }
+  .popup-day { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 16px; color: var(--trail); }
+  .popup-route { color: var(--paper); margin: 2px 0; }
+  .popup-info { color: rgba(240,235,225,0.55); font-size: 12px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="header-label">Trans Euro Trail — Projet de voyage</div>
+    <div class="header-title">Lyon <span>→</span> Kosovo</div>
+  </div>
+  <div class="header-meta">
+    <div class="big">~2 300 km</div>
+    <div class="small">4–5 jours · Himalayan 450</div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+
+    <div class="route-summary">
+      <div class="stat"><div class="val">5</div><div class="lbl">Jours</div></div>
+      <div class="stat"><div class="val">5</div><div class="lbl">Pays</div></div>
+      <div class="stat"><div class="val">~60%</div><div class="lbl">TET / off</div></div>
+    </div>
+
+    <!-- JOUR 1 -->
+    <div class="day-block active" onclick="selectDay(0)" id="day-0">
+      <div class="day-header">
+        <div class="day-num">J1</div>
+        <div class="day-info">
+          <div class="day-route">Lyon → Aoste</div>
+          <div class="day-country">🇫🇷 France · 🇮🇹 Italie</div>
+        </div>
+        <div class="day-pills">
+          <span class="pill km">~350 km</span>
+          <span class="pill tet">TET Chartreuse</span>
+        </div>
+      </div>
+      <div class="day-detail">
+        <div class="tet-section">
+          <div class="section-title">🟠 TET — Col de Porte / Chartreuse</div>
+          <p>Depuis Lyon, remonter vers Grenoble puis attaquer le TET France sections 7–8 : pistes forestières larges du massif de la Chartreuse, graviers compactés, terrain facile à intermédiaire. Cols de Porte et Cucheron. Enchaîner sur la D1090 route de la Maurienne vers le Mont-Cenis.</p>
+        </div>
+        <div class="tips">
+          <div class="tip"><span class="tip-icon">⛽</span>Plein à Chambéry avant de monter, stations rares en altitude</div>
+          <div class="tip"><span class="tip-icon">🛣️</span>Col du Mont-Cenis → Suse (Italie) par route : passage classique et rapide</div>
+          <div class="tip"><span class="tip-icon">📡</span>Couverture Free correcte côté français, passe en data-only en Italie</div>
+        </div>
+        <div class="night-badge">🏕️ Nuit à Aoste ou bivouac Val d'Aoste</div>
+      </div>
+    </div>
+
+    <!-- JOUR 2 -->
+    <div class="day-block" onclick="selectDay(1)" id="day-1">
+      <div class="day-header">
+        <div class="day-num">J2</div>
+        <div class="day-info">
+          <div class="day-route">Aoste → Ljubljana</div>
+          <div class="day-country">🇮🇹 Italie · 🇸🇮 Slovénie</div>
+        </div>
+        <div class="day-pills">
+          <span class="pill km">~380 km</span>
+          <span class="pill tet">TET Frioul</span>
+        </div>
+      </div>
+      <div class="day-detail">
+        <div class="tet-section">
+          <div class="section-title">🟠 TET — Frioul / Alpes juliennes</div>
+          <p>Traversée du Frioul-Vénétie par le TET Italie (traces de chemins blancs et pistes forestières entre Udine et Tarvisio). Terrain très roulant, pentes douces, qualité excellente pour la Himalayan. Entrée en Slovénie par la vallée de la Soča — l'une des plus belles d'Europe.</p>
+        </div>
+        <div class="tet-section">
+          <div class="section-title">🟢 TET Slovénie — Pistes forestières</div>
+          <p>La Slovénie est parmi les meilleures sections du TET : grandes pistes forestières bien entretenues, peu techniques, régulières. Contourner le parc Triglav par le sud en direction de Ljubljana.</p>
+        </div>
+        <div class="tips">
+          <div class="tip"><span class="tip-icon">🛂</span>Passage UE→UE, pas de contrôle mais garde la CI</div>
+          <div class="tip"><span class="tip-icon">🛣️</span>Vignette slovène obligatoire (~16€/semaine) — acheter en ligne ou frontière</div>
+          <div class="tip"><span class="tip-icon">🌲</span>Pistes slovènes : graviers fins, idéales Anakee Wild</div>
+        </div>
+        <div class="night-badge">🏨 Nuit Ljubljana — auberge ou hotel centre</div>
+      </div>
+    </div>
+
+    <!-- JOUR 3 -->
+    <div class="day-block" onclick="selectDay(2)" id="day-2">
+      <div class="day-header">
+        <div class="day-num">J3</div>
+        <div class="day-info">
+          <div class="day-route">Ljubljana → Split</div>
+          <div class="day-country">🇸🇮 Slovénie · 🇭🇷 Croatie</div>
+        </div>
+        <div class="day-pills">
+          <span class="pill km">~400 km</span>
+          <span class="pill tet">TET Croatie</span>
+        </div>
+      </div>
+      <div class="day-detail">
+        <div class="tet-section">
+          <div class="section-title">🟠 TET Croatie — Karst & Plaines</div>
+          <p>Descente depuis Ljubljana vers le karst croate. TET Croatie (371 km officiels) : pistes sur plateau karstique, terrain calcaire roulant, pas de boue en été. Passage par les environs des lacs de Plitvice (ne pas entrer dans le parc — contourner à l'est), puis cap vers Split via les montagnes de Velebit — pistes forestières larges.</p>
+        </div>
+        <div class="tips">
+          <div class="tip"><span class="tip-icon">💧</span>Zones karstiques : eau rare sur les pistes — emporter 2L minimum</div>
+          <div class="tip"><span class="tip-icon">⛽</span>Plein à Karlovac avant les sections off-road</div>
+          <div class="tip"><span class="tip-icon">☀️</span>Terrain sec en été : poussière, mais grip excellent pour les Anakee Wild</div>
+          <div class="tip"><span class="tip-icon">📡</span>Free data-only en Croatie (UE)</div>
+        </div>
+        <div class="night-badge">🏨 Nuit Split — le seul "grand urbain" du trip</div>
+      </div>
+    </div>
+
+    <!-- JOUR 4 -->
+    <div class="day-block" onclick="selectDay(3)" id="day-3">
+      <div class="day-header">
+        <div class="day-num">J4</div>
+        <div class="day-info">
+          <div class="day-route">Split → Sarajevo</div>
+          <div class="day-country">🇭🇷 Croatie · 🇧🇦 Bosnie</div>
+        </div>
+        <div class="day-pills">
+          <span class="pill km">~300 km</span>
+          <span class="pill tet">TET Bosnie</span>
+          <span class="pill road">Tronçons route</span>
+        </div>
+      </div>
+      <div class="day-detail">
+        <div class="tet-section">
+          <div class="section-title">🟡 TET Bosnie — Sélectionner les sections faciles</div>
+          <p>La Bosnie (610 km TET) alterne sections très roulantes (forêts de pins, hauts plateaux) et passages plus techniques (rochers, ravines). Stratégie : suivre le TET entre Livno et Glamoč (plateau facile, ~80 km de piste roulante), puis éviter les sections proches de Kupres (plus techniques) en rejoignant l'A1 vers Sarajevo.</p>
+        </div>
+        <div class="tips">
+          <div class="tip"><span class="tip-icon">⚠️</span><strong>Mines antipersonnel</strong> : rester impérativement sur les pistes balisées — pas de hors-trace en Bosnie</div>
+          <div class="tip"><span class="tip-icon">📡</span>Free : data-only en Bosnie (hors forfait standard) — eSIM locale recommandée</div>
+          <div class="tip"><span class="tip-icon">💶</span>Monnaie locale BAM (1€ ≈ 1,95 BAM) — prévoir cash, CB rare dans les villages</div>
+          <div class="tip"><span class="tip-icon">⛽</span>Plein à Livno, stations espacées sur le plateau</div>
+        </div>
+        <div class="night-badge">🏨 Nuit Sarajevo — étape culturelle incontournable</div>
+      </div>
+    </div>
+
+    <!-- JOUR 5 -->
+    <div class="day-block" onclick="selectDay(4)" id="day-4">
+      <div class="day-header">
+        <div class="day-num">J5</div>
+        <div class="day-info">
+          <div class="day-route">Sarajevo → Pristina</div>
+          <div class="day-country">🇧🇦 Bosnie · 🇽🇰 Kosovo</div>
+        </div>
+        <div class="day-pills">
+          <span class="pill km">~280 km</span>
+          <span class="pill tet">TET Serbie / Kosovo</span>
+        </div>
+      </div>
+      <div class="day-detail">
+        <div class="tet-section">
+          <div class="section-title">🟠 TET — Foča → Rudo (Bosnie-Serbie)</div>
+          <p>Depuis Sarajevo, descendre vers Foča puis remonter via le TET en longeant la Drina — pistes le long des forêts de montagne, terrain très roulant. Passage frontière Bosnie/Serbie par Vardište (ouvert, passage rapide en général).</p>
+        </div>
+        <div class="tet-section">
+          <div class="section-title">🟢 Serbie → Kosovo — Route M-22</div>
+          <p>Depuis Prijepolje (Serbie), route nationale via Novi Pazar puis col de Merdare pour entrer au Kosovo. Alternative : rejoindre directement par la E65 si fatigué. Pristina à 2h de la frontière serbe.</p>
+        </div>
+        <div class="tips">
+          <div class="tip"><span class="tip-icon">🛂</span>Frontière Serbie→Kosovo : possible dans ce sens, mais <strong>pas le retour Kosovo→Serbie</strong>. Prévoir la sortie par la Macédoine du Nord ou l'Albanie.</div>
+          <div class="tip"><span class="tip-icon">📡</span>Free data-only Serbie, hors forfait Kosovo — eSIM locale 2-3€/Go</div>
+          <div class="tip"><span class="tip-icon">💶</span>Kosovo : euro utilisé directement, pas de change</div>
+        </div>
+        <div class="night-badge">🏁 Arrivée Pristina — Objectif atteint !</div>
+      </div>
+    </div>
+
+    <!-- NOTE ROAMING -->
+    <div style="padding: 20px 28px; background: rgba(201,162,39,0.07); border-top: 1px solid #2a221a;">
+      <div style="font-family:'Barlow Condensed',sans-serif;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--warn);margin-bottom:10px;">⚠️ Roaming Free 20€</div>
+      <div style="font-size:12px;color:rgba(240,235,225,0.5);line-height:1.6;">
+        ✅ France, Italie, Slovénie, Croatie : inclus (plein RLAH)<br>
+        🟡 Serbie : data-only inclus (appels chers)<br>
+        🔴 Bosnie, Kosovo : hors forfait — <strong style="color:var(--warn)">eSIM locale indispensable</strong>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- MAP PANEL -->
+  <div class="map-panel">
+    <div id="map"></div>
+
+    <div class="map-overlay">
+      <div class="ov-title">Résumé route</div>
+      <div class="ov-line"><span>Distance</span><strong>~2 280 km</strong></div>
+      <div class="ov-line"><span>TET pur</span><strong>~900 km</strong></div>
+      <div class="ov-line"><span>Liaisons</span><strong>~1 380 km</strong></div>
+      <div class="ov-line"><span>Pays traversés</span><strong>6</strong></div>
+    </div>
+
+    <div class="map-legend">
+      <div class="legend-item">
+        <div class="legend-line" style="background:var(--trail);"></div>
+        Trace TET / off-road
+      </div>
+      <div class="legend-item">
+        <div class="legend-line" style="background:var(--sky);"></div>
+        Liaison route
+      </div>
+      <div class="legend-item">
+        <div style="width:12px;height:12px;border-radius:50%;background:var(--trail);"></div>
+        Étape nuit
+      </div>
+      <div class="legend-item">
+        <div style="width:10px;height:10px;border-radius:50%;background:var(--forest);border:2px solid var(--forest);"></div>
+        Point d'intérêt
+      </div>
+      <span style="margin-left:auto;font-size:10px;letter-spacing:1px;color:rgba(240,235,225,0.2);">TRACES APPROXIMATIVES — Télécharger GPX sur transeurotrail.org</span>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── MAP INIT ──
+const map = L.map('map', {
+  center: [45.5, 13.5],
+  zoom: 6,
+  zoomControl: true,
+  attributionControl: false
+});
+
+// Dark tile layer
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution: '© OpenStreetMap © CARTO',
+  subdomains: 'abcd',
+  maxZoom: 19
+}).addTo(map);
+
+// ── WAYPOINTS ──
+const stops = [
+  { name: 'Lyon', coords: [45.748, 4.847], day: 'Départ J1', info: 'Point de départ', color: '#c8b89a' },
+  { name: 'Aoste (Val d\'Aoste)', coords: [45.737, 7.315], day: 'Nuit J1', info: '~350 km · TET Chartreuse + Mont-Cenis', color: '#e05c1a' },
+  { name: 'Ljubljana', coords: [46.056, 14.506], day: 'Nuit J2', info: '~380 km · TET Frioul + Slovénie', color: '#e05c1a' },
+  { name: 'Split', coords: [43.508, 16.44], day: 'Nuit J3', info: '~400 km · TET Croatie Karst', color: '#e05c1a' },
+  { name: 'Sarajevo', coords: [43.847, 18.356], day: 'Nuit J4', info: '~300 km · TET Bosnie sections faciles', color: '#e05c1a' },
+  { name: 'Pristina', coords: [42.667, 21.166], day: 'Arrivée J5 🏁', info: '~280 km · TET Bosnie-Serbie + Kosovo', color: '#3d6b4f' },
+];
+
+// ── ROUTE SEGMENTS ──
+// Liaison segments (blue)
+const liaisonSegments = [
+  // Lyon → Chartreuse area
+  [[45.748, 4.847], [45.193, 5.723], [45.383, 6.073]],
+  // Mont-Cenis → Aoste
+  [[45.25, 6.9], [45.737, 7.315]],
+  // Ljubljana → Karlovac area
+  [[46.056, 14.506], [45.48, 15.55]],
+  // Livno → A1 → Sarajevo
+  [[43.818, 17.011], [43.847, 18.356]],
+  // Foča → Sarajevo
+  [[43.847, 18.356], [43.5, 18.78]],
+  // Prijepolje → Novi Pazar → Pristina
+  [[43.39, 19.645], [43.133, 20.517], [42.667, 21.166]],
+];
+
+// TET off-road segments (orange) — approximate routing following TET corridors
+const tetSegments = [
+  // TET Chartreuse (Lyon → Col de Porte area)
+  [[45.748, 4.847], [45.35, 5.77], [45.327, 5.912], [45.25, 6.35], [45.25, 6.9]],
+  // TET Frioul (entre Udine et Tarvisio)
+  [[45.737, 7.315], [45.87, 9.1], [46.05, 11.12], [46.27, 12.38], [46.506, 13.567], [46.502, 13.641]],
+  // TET Slovénie (Soča valley → Ljubljana)
+  [[46.502, 13.641], [46.258, 13.894], [46.08, 14.026], [46.056, 14.506]],
+  // TET Croatie — karst plateau
+  [[46.056, 14.506], [45.55, 14.8], [45.11, 15.58], [44.55, 15.95], [44.2, 16.55], [43.508, 16.44]],
+  // TET Bosnie — Livno plateau facile
+  [[43.508, 16.44], [43.83, 17.007], [43.818, 17.011]],
+  // Bosnie — Foča corridor forêt
+  [[43.847, 18.356], [43.507, 18.778], [43.45, 19.15], [43.39, 19.645]],
+];
+
+// Draw liaison lines
+liaisonSegments.forEach(seg => {
+  L.polyline(seg, {
+    color: '#4a7fa5',
+    weight: 2.5,
+    opacity: 0.7,
+    dashArray: '6 4'
+  }).addTo(map);
+});
+
+// Draw TET lines
+tetSegments.forEach(seg => {
+  L.polyline(seg, {
+    color: '#e05c1a',
+    weight: 3.5,
+    opacity: 0.85,
+  }).addTo(map);
+});
+
+// ── MARKERS ──
+function createMarker(stop) {
+  const isStart = stop.name === 'Lyon';
+  const isEnd = stop.name === 'Pristina';
+
+  const html = `
+    <div style="
+      width: ${isStart || isEnd ? 16 : 14}px;
+      height: ${isStart || isEnd ? 16 : 14}px;
+      border-radius: 50%;
+      background: ${stop.color};
+      border: 3px solid ${isEnd ? '#7bc49a' : (isStart ? '#c8b89a' : '#e05c1a')};
+      box-shadow: 0 0 0 3px rgba(0,0,0,0.5), 0 0 12px ${stop.color}66;
+    "></div>
+  `;
+
+  const icon = L.divIcon({ html, className: '', iconAnchor: [8, 8] });
+
+  const marker = L.marker(stop.coords, { icon }).addTo(map);
+  marker.bindPopup(`
+    <div class="popup-day">${stop.day}</div>
+    <div class="popup-route">${stop.name}</div>
+    <div class="popup-info">${stop.info}</div>
+  `, { maxWidth: 220 });
+
+  return marker;
+}
+
+stops.forEach(createMarker);
+
+// ── POI markers (TET highlights) ──
+const pois = [
+  { coords: [45.327, 5.912], label: 'Col de Porte\n(TET Chartreuse)', color: '#c9a227' },
+  { coords: [46.258, 13.894], label: 'Vallée de la Soča', color: '#c9a227' },
+  { coords: [44.877, 15.617], label: 'Velebit\n(TET Croatie)', color: '#c9a227' },
+  { coords: [43.818, 17.011], label: 'Plateau de Livno\n(TET Bosnie facile)', color: '#c9a227' },
+];
+
+pois.forEach(poi => {
+  const html = `<div style="width:8px;height:8px;border-radius:50%;background:${poi.color};border:2px solid ${poi.color}99;box-shadow:0 0 6px ${poi.color}88;"></div>`;
+  const icon = L.divIcon({ html, className: '', iconAnchor: [4, 4] });
+  L.marker(poi.coords, { icon }).addTo(map)
+    .bindTooltip(poi.label, {
+      permanent: false,
+      direction: 'top',
+      className: 'tet-tooltip',
+      offset: [0, -6]
+    });
+});
+
+// ── DAY SELECTION ──
+const dayCoords = [
+  [45.748, 4.847],   // J1 Lyon
+  [45.737, 7.315],   // J1 night Aoste
+  [46.056, 14.506],  // J2 Ljubljana
+  [43.508, 16.44],   // J3 Split
+  [43.847, 18.356],  // J4 Sarajevo
+  [42.667, 21.166],  // J5 Pristina
+];
+
+function selectDay(idx) {
+  document.querySelectorAll('.day-block').forEach((el, i) => {
+    el.classList.toggle('active', i === idx);
+  });
+  // Fly to the destination night stop
+  const target = dayCoords[idx + 1];
+  map.flyTo(target, 8, { duration: 1.2 });
+}
+
+// Tooltip style injection
+const style = document.createElement('style');
+style.textContent = `
+  .tet-tooltip {
+    background: rgba(26,20,16,0.95) !important;
+    border: 1px solid #3a2e20 !important;
+    color: #c9a227 !important;
+    font-family: 'Barlow Condensed', sans-serif !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.5px !important;
+    white-space: pre-line !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important;
+    padding: 6px 10px !important;
+  }
+  .tet-tooltip::before { display: none !important; }
+`;
+document.head.appendChild(style);
+</script>
+</body>
+</html>
