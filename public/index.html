@@ -385,9 +385,11 @@
     font-size: 13px; max-width: 230px; display: none;
   }
   .rider-badge.show { display: block; }
-  .rider-badge .rb-title { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #3ba0ff; margin-bottom: 4px; }
-  .rider-badge .rb-time { color: var(--paper); font-weight: 700; }
-  .rider-badge .rb-sub { color: rgba(240,235,225,0.5); font-size: 11px; }
+  .rider-badge .rb-title { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #3ba0ff; margin-bottom: 6px; }
+  .rider-badge .rb-line { display: flex; align-items: baseline; gap: 7px; margin-bottom: 5px; }
+  .rider-badge .rb-dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 6px currentColor; align-self: center; }
+  .rider-badge .rb-name { color: var(--paper); font-weight: 700; }
+  .rider-badge .rb-when { color: rgba(240,235,225,0.5); font-size: 11px; }
   .rider-badge .rb-center {
     margin-top: 6px; display: inline-block; cursor: pointer;
     color: #3ba0ff; font-size: 11px; letter-spacing: 1px;
@@ -749,12 +751,11 @@
   <div class="map-panel">
     <div id="map"></div>
 
-    <!-- Badge position pilote (visible par tous quand la position est publiée) -->
+    <!-- Badge positions (visible par tous quand au moins une position est publiée) -->
     <div class="rider-badge" id="riderBadge">
-      <div class="rb-title">📍 Position du pilote</div>
-      <div class="rb-time" id="rbTime">—</div>
-      <div class="rb-sub" id="rbSub"></div>
-      <span class="rb-center" id="rbCenter">Centrer</span>
+      <div class="rb-title">📍 Positions</div>
+      <div id="rbList"></div>
+      <span class="rb-center" id="rbCenter">Tout afficher</span>
     </div>
 
     <div class="map-overlay">
@@ -974,15 +975,15 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
-// ════════════ POSITION DU PILOTE (Cloudflare Worker + KV) ════════════
-// Lecture publique : GET  /api/position   → { lat, lng, accuracy, updatedAt } ou null
-// Écriture admin   : POST /api/position   (en-tête x-admin-token = mot de passe)
+// ════════════ POSITIONS DES PILOTES (Cloudflare Worker + KV) ════════════
+// Lecture publique : GET  /api/position  → [ {id,name,color,lat,lng,accuracy,updatedAt}, ... ]
+// Écriture admin   : POST /api/position  (en-tête x-admin-token = mot de passe → identifie le pilote)
 const API_URL = '/api/position';
-let riderMarker = null, riderPos = null;
+const riderMarkers = {};   // id → L.marker
+let ridersData = [];       // dernières positions connues
 
 const riderBadge = document.getElementById('riderBadge');
-const rbTime = document.getElementById('rbTime');
-const rbSub  = document.getElementById('rbSub');
+const rbList = document.getElementById('rbList');
 
 function relTime(ts){
   const s = Math.floor((Date.now() - ts) / 1000);
@@ -992,19 +993,39 @@ function relTime(ts){
   return 'il y a ' + Math.floor(s/86400) + ' j';
 }
 
-function renderRider(pos){
-  if(!pos || typeof pos.lat !== 'number'){ riderBadge.classList.remove('show'); return; }
-  riderPos = pos;
-  const html = '<div class="rider-dot"><span class="rider-pulse"></span></div>';
-  const icon = L.divIcon({ html, className:'', iconAnchor:[9,9] });
-  if(!riderMarker){ riderMarker = L.marker([pos.lat,pos.lng],{icon, zIndexOffset:1000}).addTo(map); }
-  else { riderMarker.setLatLng([pos.lat,pos.lng]); riderMarker.setIcon(icon); }
-  const d = new Date(pos.updatedAt);
-  riderMarker.bindPopup('<div class="popup-day">📍 Pilote</div><div class="popup-info">Mise à jour : '+d.toLocaleString('fr-FR')+(pos.accuracy?'<br>± '+pos.accuracy+' m':'')+'</div>');
-  rbTime.textContent = 'MAJ ' + relTime(pos.updatedAt);
-  rbSub.textContent  = d.toLocaleString('fr-FR');
+function renderRiders(list){
+  ridersData = Array.isArray(list) ? list.filter(p => p && typeof p.lat === 'number') : [];
+  if(ridersData.length === 0){ riderBadge.classList.remove('show'); return; }
+
+  ridersData.forEach(p => {
+    const color = p.color || '#3ba0ff';
+    const html = '<div class="rider-dot" style="background:'+color+';box-shadow:0 0 0 3px rgba(0,0,0,0.4),0 0 16px '+color+';">'
+               + '<span class="rider-pulse" style="border-color:'+color+';"></span></div>';
+    const icon = L.divIcon({ html, className:'', iconAnchor:[9,9] });
+    if(!riderMarkers[p.id]){
+      riderMarkers[p.id] = L.marker([p.lat,p.lng],{icon, zIndexOffset:1000}).addTo(map);
+    } else {
+      riderMarkers[p.id].setLatLng([p.lat,p.lng]); riderMarkers[p.id].setIcon(icon);
+    }
+    const d = new Date(p.updatedAt);
+    riderMarkers[p.id].bindPopup('<div class="popup-day" style="color:'+color+'">📍 '+escapeHtml(p.name||'Pilote')+'</div>'
+      + '<div class="popup-info">Mise à jour : '+d.toLocaleString('fr-FR')+(p.accuracy?'<br>± '+p.accuracy+' m':'')+'</div>');
+  });
+
+  updateBadge();
   riderBadge.classList.add('show');
 }
+
+function updateBadge(){
+  rbList.innerHTML = ridersData.map(p => {
+    const color = p.color || '#3ba0ff';
+    return '<div class="rb-line"><span class="rb-dot" style="background:'+color+';color:'+color+'"></span>'
+         + '<span><span class="rb-name">'+escapeHtml(p.name||'Pilote')+'</span> '
+         + '<span class="rb-when">'+relTime(p.updatedAt)+'</span></span></div>';
+  }).join('');
+}
+
+function escapeHtml(s){ return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
 async function loadPosition(){
   try{
@@ -1012,18 +1033,22 @@ async function loadPosition(){
     if(!r.ok) return;                       // API pas encore déployée → on ignore
     const ct = r.headers.get('content-type') || '';
     if(ct.indexOf('application/json') === -1) return;
-    renderRider(await r.json());
+    renderRiders(await r.json());
   }catch(e){ /* hors-ligne ou API absente : la carte reste normale */ }
 }
 
+// "Tout afficher" : cadre la carte sur toutes les positions connues
 document.getElementById('rbCenter').addEventListener('click', ()=>{
-  if(riderPos) map.flyTo([riderPos.lat, riderPos.lng], 9, { duration:1.2 });
+  if(ridersData.length === 0) return;
+  if(ridersData.length === 1){ map.flyTo([ridersData[0].lat, ridersData[0].lng], 9, { duration:1.2 }); return; }
+  const bounds = L.latLngBounds(ridersData.map(p => [p.lat, p.lng]));
+  map.flyToBounds(bounds, { padding:[60,60], duration:1.2, maxZoom:10 });
 });
 
 // Lecture au chargement, puis rafraîchissement auto toutes les 60 s
 loadPosition();
 setInterval(loadPosition, 60000);
-setInterval(()=>{ if(riderPos) rbTime.textContent = 'MAJ ' + relTime(riderPos.updatedAt); }, 30000);
+setInterval(()=>{ if(ridersData.length) updateBadge(); }, 30000);
 
 // ── PANNEAU ADMIN (ouvert via #admin dans l'URL) ──
 const adminPanel = document.getElementById('adminPanel');
@@ -1068,8 +1093,9 @@ document.getElementById('apUpdate').addEventListener('click', ()=>{
       });
       if(r.status === 401){ setStatus('Mot de passe refusé.', 'err'); btn.disabled = false; return; }
       if(!r.ok){ setStatus('Erreur serveur ('+r.status+').', 'err'); btn.disabled = false; return; }
-      renderRider(await r.json());
-      setStatus('Position publiée ✔ — visible par tous.', 'ok');
+      const rec = await r.json();
+      await loadPosition();   // recharge toutes les positions
+      setStatus('Position publiée ✔ ('+(rec.name||'pilote')+') — visible par tous.', 'ok');
     }catch(e){ setStatus('Échec réseau : '+e.message, 'err'); }
     btn.disabled = false;
   }, err=>{
