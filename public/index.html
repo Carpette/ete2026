@@ -438,6 +438,35 @@
   .admin-panel .ap-status.info { color: rgba(240,235,225,0.55); }
   .admin-section { display: none; }
   .admin-section.show { display: block; }
+  .admin-panel { max-height: 86vh; overflow-y: auto; }
+  .admin-panel .ap-divider { height: 1px; background: #2a221a; margin: 14px 0 12px; }
+  .admin-panel input[type=file] { padding: 7px; font-size: 12px; }
+  .admin-panel .btn-media { background: #3d6b4f; color: #fff; margin-top: 2px; }
+  .admin-panel .btn-media:hover { background: #4a805f; }
+
+  /* ── MÉDIAS (pins carte + galerie) ── */
+  .media-pin {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: #1a1410; border: 2px solid #c9a227;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; box-shadow: 0 0 0 2px rgba(0,0,0,0.45), 0 0 10px rgba(0,0,0,0.5);
+  }
+  .pop-play {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    font-size: 34px; color: #fff; text-shadow: 0 2px 8px rgba(0,0,0,0.8); pointer-events: none;
+  }
+  .media-gallery { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .media-thumb {
+    position: relative; aspect-ratio: 1; overflow: hidden;
+    border-radius: 4px; cursor: pointer; border: 1px solid #2a221a;
+  }
+  .media-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .2s; }
+  .media-thumb:hover img { transform: scale(1.06); }
+  .media-thumb .mt-badge {
+    position: absolute; bottom: 3px; right: 4px; color: #fff;
+    font-size: 12px; text-shadow: 0 1px 3px #000; pointer-events: none;
+  }
+  .info-panel.media .panel-title { color: var(--warn); }
 
   /* ════════ RESPONSIVE / MOBILE ════════ */
   @media (max-width: 860px) {
@@ -745,6 +774,12 @@
       <div class="info-row"><strong>4) Prolongation Carpates (les routes mythiques).</strong> Depuis l'Apuseni, 1–2 jours de plus pour la <strong>Transalpina</strong> (DN67C, ~2 145 m) et la <strong>Transfăgărășan</strong> (DN7C). ⚠️ Saison : la <strong>Transalpina</strong> ouvre en général en juin ; la <strong>Transfăgărășan</strong> ouvre souvent seulement vers fin juin / 1ᵉʳ juillet — <strong>vérifie l'ouverture avant</strong>. Si une seule est ouverte fin juin, ce sera la Transalpina.</div>
     </div>
 
+    <!-- PANEL: GALERIE MÉDIAS (rempli dynamiquement) -->
+    <div class="info-panel media" id="mediaPanel" style="display:none;">
+      <div class="panel-title">📷 Photos & vidéos du voyage</div>
+      <div class="media-gallery" id="mediaGallery"></div>
+    </div>
+
   </aside>
 
   <!-- MAP PANEL -->
@@ -800,6 +835,15 @@
   </label>
   <button class="btn-update" id="apUpdate">📍 Mettre à jour ma position</button>
   <div class="ap-status info" id="apStatus"></div>
+
+  <div class="ap-divider"></div>
+  <div class="ap-hint">Ajoute une photo ou une vidéo YouTube — taguée à ta position GPS du moment.</div>
+  <input type="text" id="apCaption" placeholder="Légende (optionnel)">
+  <input type="file" id="apPhoto" accept="image/*" capture="environment">
+  <button class="btn-media" id="apAddPhoto">📷 Publier la photo</button>
+  <input type="text" id="apYoutube" placeholder="Lien YouTube" style="margin-top:10px;">
+  <button class="btn-media" id="apAddVideo">▶ Publier la vidéo</button>
+  <div class="ap-status info" id="apMediaStatus"></div>
 </div>
 
 <script>
@@ -1102,6 +1146,149 @@ document.getElementById('apUpdate').addEventListener('click', ()=>{
     setStatus('GPS refusé/indisponible ('+err.message+'). HTTPS requis.', 'err');
     document.getElementById('apUpdate').disabled = false;
   }, { enableHighAccuracy:true, timeout:15000, maximumAge:0 });
+});
+
+// ════════════ MÉDIAS GÉOLOCALISÉS (photos + YouTube) ════════════
+const MEDIA_URL = '/api/media';
+const mediaMarkers = {};
+let mediaData = [];
+const mediaPanel = document.getElementById('mediaPanel');
+const mediaGallery = document.getElementById('mediaGallery');
+const apMediaStatus = document.getElementById('apMediaStatus');
+function setMediaStatus(msg, cls){ apMediaStatus.textContent = msg; apMediaStatus.className = 'ap-status ' + (cls||'info'); }
+
+function mediaIcon(item){
+  const color = (item.rider && item.rider.color) || '#c9a227';
+  const glyph = item.type === 'youtube' ? '▶' : '📷';
+  const html = '<div class="media-pin" style="border-color:'+color+'"><span>'+glyph+'</span></div>';
+  return L.divIcon({ html, className:'', iconAnchor:[14,14] });
+}
+
+function mediaPopup(item){
+  const color = (item.rider && item.rider.color) || '#c9a227';
+  const name = escapeHtml((item.rider && item.rider.name) || '');
+  const date = new Date(item.createdAt).toLocaleString('fr-FR');
+  const cap = item.caption ? '<div style="color:var(--paper);margin-top:4px">'+escapeHtml(item.caption)+'</div>' : '';
+  let media;
+  if(item.type === 'youtube'){
+    media = '<a href="'+item.url+'" target="_blank" rel="noopener" style="position:relative;display:block">'
+          + '<img src="'+item.thumb+'" style="width:240px;display:block;border-radius:4px"><span class="pop-play">▶</span></a>';
+  } else {
+    media = '<a href="'+item.url+'" target="_blank" rel="noopener">'
+          + '<img src="'+item.url+'" loading="lazy" style="width:240px;display:block;border-radius:4px"></a>';
+  }
+  return '<div class="popup-day" style="color:'+color+'">'+(item.type==='youtube'?'▶':'📷')+' '+name+'</div>'
+       + media + cap + '<div class="popup-info">'+date+'</div>';
+}
+
+function renderMedia(list){
+  mediaData = Array.isArray(list) ? list.filter(x => x && typeof x.lat === 'number') : [];
+  mediaData.forEach(item => {
+    if(!mediaMarkers[item.id]){
+      mediaMarkers[item.id] = L.marker([item.lat, item.lng], { icon: mediaIcon(item) })
+        .addTo(map).bindPopup(mediaPopup(item), { maxWidth: 260 });
+    }
+  });
+  if(mediaData.length === 0){ mediaPanel.style.display = 'none'; return; }
+  mediaPanel.style.display = 'block';
+  mediaGallery.innerHTML = mediaData.map(item => {
+    const thumb = item.type === 'youtube' ? item.thumb : item.url;
+    const badge = item.type === 'youtube' ? '<span class="mt-badge">▶</span>' : '';
+    return '<div class="media-thumb" data-id="'+item.id+'"><img src="'+thumb+'" loading="lazy">'+badge+'</div>';
+  }).join('');
+  mediaGallery.querySelectorAll('.media-thumb').forEach(el => {
+    el.addEventListener('click', () => {
+      const it = mediaData.find(x => x.id === el.getAttribute('data-id'));
+      if(it && mediaMarkers[it.id]){ map.flyTo([it.lat, it.lng], 10, { duration:1.0 }); mediaMarkers[it.id].openPopup(); }
+    });
+  });
+}
+
+async function loadMedia(){
+  try{
+    const r = await fetch(MEDIA_URL, { cache:'no-store' });
+    if(!r.ok) return;
+    const ct = r.headers.get('content-type') || '';
+    if(ct.indexOf('application/json') === -1) return;
+    renderMedia(await r.json());
+  }catch(e){ /* API absente : on ignore */ }
+}
+loadMedia();
+setInterval(loadMedia, 90000);
+
+// Compression image côté navigateur (réduit fortement la taille avant envoi)
+function downscaleImage(file, maxDim, quality){
+  maxDim = maxDim || 1600; quality = quality || 0.82;
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const u = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(u);
+      let w = img.naturalWidth, h = img.naturalHeight;
+      if(Math.max(w, h) > maxDim){ const s = maxDim / Math.max(w, h); w = Math.round(w*s); h = Math.round(h*s); }
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      c.toBlob(b => b ? resolve(b) : reject(new Error('compression échouée')), 'image/jpeg', quality);
+    };
+    img.onerror = () => { URL.revokeObjectURL(u); reject(new Error('image illisible')); };
+    img.src = u;
+  });
+}
+
+function geoThen(onOk, onErr){
+  if(!navigator.geolocation){ onErr(new Error('géoloc indisponible')); return; }
+  navigator.geolocation.getCurrentPosition(p => onOk(p.coords), onErr,
+    { enableHighAccuracy:true, timeout:15000, maximumAge:0 });
+}
+
+// Publier une photo
+document.getElementById('apAddPhoto').addEventListener('click', () => {
+  const token = apToken.value.trim();
+  if(!token){ setMediaStatus('Mot de passe requis.', 'err'); return; }
+  const f = document.getElementById('apPhoto').files[0];
+  if(!f){ setMediaStatus('Choisis une photo.', 'err'); return; }
+  setMediaStatus('Localisation + compression…', 'info');
+  geoThen(async coords => {
+    try{
+      const blob = await downscaleImage(f);
+      const fd = new FormData();
+      fd.append('file', blob, 'photo.jpg');
+      fd.append('lat', coords.latitude);
+      fd.append('lng', coords.longitude);
+      fd.append('caption', document.getElementById('apCaption').value || '');
+      const r = await fetch(MEDIA_URL, { method:'POST', headers:{ 'x-admin-token': token }, body: fd });
+      if(r.status === 401){ setMediaStatus('Mot de passe refusé.', 'err'); return; }
+      if(!r.ok){ const e = await r.json().catch(()=>({})); setMediaStatus('Erreur : '+(e.error||r.status), 'err'); return; }
+      const rec = await r.json();
+      renderMedia([rec, ...mediaData]);
+      setMediaStatus('Photo publiée ✔', 'ok');
+      document.getElementById('apPhoto').value = ''; document.getElementById('apCaption').value = '';
+    }catch(e){ setMediaStatus('Échec : '+e.message, 'err'); }
+  }, err => setMediaStatus('GPS refusé ('+err.message+').', 'err'));
+});
+
+// Publier une vidéo YouTube
+document.getElementById('apAddVideo').addEventListener('click', () => {
+  const token = apToken.value.trim();
+  if(!token){ setMediaStatus('Mot de passe requis.', 'err'); return; }
+  const url = document.getElementById('apYoutube').value.trim();
+  if(!url){ setMediaStatus('Colle un lien YouTube.', 'err'); return; }
+  setMediaStatus('Localisation…', 'info');
+  geoThen(async coords => {
+    try{
+      const r = await fetch(MEDIA_URL, {
+        method:'POST',
+        headers:{ 'content-type':'application/json', 'x-admin-token': token },
+        body: JSON.stringify({ type:'youtube', url, lat:coords.latitude, lng:coords.longitude, caption: document.getElementById('apCaption').value || '' })
+      });
+      if(r.status === 401){ setMediaStatus('Mot de passe refusé.', 'err'); return; }
+      if(!r.ok){ const e = await r.json().catch(()=>({})); setMediaStatus('Erreur : '+(e.error||r.status), 'err'); return; }
+      const rec = await r.json();
+      renderMedia([rec, ...mediaData]);
+      setMediaStatus('Vidéo publiée ✔', 'ok');
+      document.getElementById('apYoutube').value = ''; document.getElementById('apCaption').value = '';
+    }catch(e){ setMediaStatus('Échec : '+e.message, 'err'); }
+  }, err => setMediaStatus('GPS refusé ('+err.message+').', 'err'));
 });
 </script>
 </body>
