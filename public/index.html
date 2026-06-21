@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Road Trip — Lyon → Roumanie · F900XR</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@400;500&display=swap');
+
+  :root {
+    --ink:    #1a1410;
+    --paper:  #f0ebe1;
+    --dust:   #c8b89a;
+    --trail:  #e05c1a;
+    --forest: #3d6b4f;
+    --sky:    #4a7fa5;
+    --warn:   #c9a227;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--ink);
+    color: var(--paper);
+    font-family: 'Barlow', sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ── HEADER ── */
+  header {
+    background: var(--ink);
+    border-bottom: 3px solid var(--trail);
+    padding: 28px 40px 22px;
+    display: flex;
+    align-items: flex-end;
+    gap: 32px;
+    position: relative;
+    overflow: hidden;
+  }
+  header::before {
+    content: 'RO';
+    position: absolute;
+    right: -10px;
+    top: -20px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 900;
+    font-size: 200px;
+    color: rgba(255,255,255,0.03);
+    letter-spacing: -10px;
+    line-height: 1;
+    pointer-events: none;
+    user-select: none;
+  }
+  .header-label {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--trail);
+  }
+  .header-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 900;
+    font-size: 52px;
+    line-height: 1;
+    color: var(--paper);
+    letter-spacing: -1px;
+  }
+  .header-title span { color: var(--trail); }
+  .header-meta {
+    margin-left: auto;
+    text-align: right;
+    font-family: 'Barlow Condensed', sans-serif;
+  }
+  .header-meta .big { font-size: 32px; font-weight: 700; color: var(--dust); }
+  .header-meta .small { font-size: 11px; letter-spacing: 2px; color: rgba(240,235,225,0.4); text-transform: uppercase; }
+
+  /* ── LAYOUT ── */
+  .container { display: grid; grid-template-columns: 400px 1fr; min-height: calc(100vh - 120px); }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    background: #110e0b;
+    border-right: 1px solid #2a221a;
+    overflow-y: auto;
+    max-height: calc(100vh - 120px);
+    padding-bottom: 40px;
+  }
+
+  .route-summary {
+    padding: 24px 28px 20px;
+    border-bottom: 1px solid #2a221a;
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+  }
+  .stat { text-align: center; }
+  .stat .val {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--trail);
+    line-height: 1;
+  }
+  .stat .lbl {
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: rgba(240,235,225,0.35);
+    margin-top: 4px;
+  }
+
+  /* ── DAYS ── */
+  .day-block {
+    border-bottom: 1px solid #2a221a;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .day-block:hover { background: #1a1410; }
+  .day-block.active { background: #1e1610; border-left: 3px solid var(--trail); }
+
+  .day-header {
+    padding: 18px 28px 14px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .day-num {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 900;
+    font-size: 36px;
+    color: var(--trail);
+    line-height: 1;
+    min-width: 42px;
+  }
+  .day-info {}
+  .day-route {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--paper);
+    line-height: 1.1;
+  }
+  .day-country {
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--dust);
+    margin-top: 3px;
+  }
+  .day-pills {
+    margin-left: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+  }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    border-radius: 2px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .pill.tet { background: rgba(224,92,26,0.2); color: var(--trail); border: 1px solid rgba(224,92,26,0.3); }
+  .pill.road { background: rgba(74,127,165,0.15); color: var(--sky); border: 1px solid rgba(74,127,165,0.3); }
+  .pill.km { background: rgba(200,184,154,0.1); color: var(--dust); border: 1px solid rgba(200,184,154,0.2); }
+
+  .day-detail {
+    padding: 0 28px 18px 84px;
+    display: none;
+  }
+  .day-block.active .day-detail { display: block; }
+
+  .tet-section {
+    background: rgba(224,92,26,0.08);
+    border-left: 2px solid var(--trail);
+    padding: 10px 14px;
+    margin-bottom: 10px;
+    border-radius: 0 4px 4px 0;
+  }
+  .tet-section .section-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--trail);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .tet-section p {
+    font-size: 13px;
+    color: rgba(240,235,225,0.65);
+    margin-top: 4px;
+    line-height: 1.5;
+  }
+
+  .camp-section {
+    background: rgba(61,107,79,0.1);
+    border-left: 2px solid var(--forest);
+    padding: 10px 14px;
+    margin-bottom: 10px;
+    border-radius: 0 4px 4px 0;
+  }
+  .camp-section .section-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    color: #7bc49a;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .camp-section p {
+    font-size: 13px;
+    color: rgba(240,235,225,0.65);
+    margin-top: 4px;
+    line-height: 1.5;
+  }
+
+  .tips {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .tip {
+    display: flex;
+    gap: 8px;
+    font-size: 12px;
+    color: rgba(240,235,225,0.5);
+    line-height: 1.4;
+  }
+  .tip-icon { flex-shrink: 0; font-size: 13px; margin-top: 1px; }
+
+  .night-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 12px;
+    padding: 5px 10px;
+    background: rgba(61,107,79,0.15);
+    border: 1px solid rgba(61,107,79,0.35);
+    border-radius: 3px;
+    font-size: 11px;
+    color: #7bc49a;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+  }
+
+  /* ── INFO PANELS (frontières / bivouac / alternatives) ── */
+  .info-panel {
+    padding: 20px 28px;
+    border-top: 1px solid #2a221a;
+  }
+  .info-panel .panel-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .info-panel.frontiere .panel-title { color: var(--sky); }
+  .info-panel.bivouac .panel-title { color: #7bc49a; }
+  .info-panel.alt .panel-title { color: var(--warn); }
+  .info-row {
+    font-size: 12.5px;
+    color: rgba(240,235,225,0.62);
+    line-height: 1.55;
+    margin-bottom: 8px;
+  }
+  .info-row strong { color: var(--paper); }
+  .flag-line { display:flex; gap:8px; margin-bottom:7px; font-size:12.5px; color:rgba(240,235,225,0.62); line-height:1.45; }
+  .flag-line .fl { flex-shrink:0; }
+
+  /* ── MAP PANEL ── */
+  .map-panel {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+  #map {
+    flex: 1;
+    min-height: 600px;
+  }
+
+  .map-legend {
+    background: var(--ink);
+    border-top: 1px solid #2a221a;
+    padding: 14px 24px;
+    display: flex;
+    gap: 28px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: rgba(240,235,225,0.45);
+  }
+  .legend-line {
+    width: 28px;
+    height: 3px;
+    border-radius: 2px;
+  }
+
+  .map-overlay {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    background: rgba(26,20,16,0.9);
+    border: 1px solid #2a221a;
+    border-radius: 4px;
+    padding: 12px 16px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 13px;
+    z-index: 1000;
+    max-width: 210px;
+  }
+  .map-overlay .ov-title {
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--trail);
+    margin-bottom: 8px;
+  }
+  .map-overlay .ov-line {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    color: rgba(240,235,225,0.6);
+    margin-bottom: 3px;
+  }
+  .map-overlay .ov-line strong { color: var(--paper); }
+
+  /* Leaflet popup custom */
+  .leaflet-popup-content-wrapper {
+    background: #1a1410 !important;
+    color: var(--paper) !important;
+    border: 1px solid #3a2e20 !important;
+    border-radius: 4px !important;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.6) !important;
+  }
+  .leaflet-popup-tip { background: #1a1410 !important; }
+  .leaflet-popup-content { font-family: 'Barlow', sans-serif; font-size: 13px; line-height: 1.5; }
+  .popup-day { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 16px; color: var(--trail); }
+  .popup-route { color: var(--paper); margin: 2px 0; }
+  .popup-info { color: rgba(240,235,225,0.55); font-size: 12px; }
+
+  /* ── POSITION DU PILOTE (live) ── */
+  .rider-dot {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: #3ba0ff; border: 3px solid #fff;
+    box-shadow: 0 0 0 3px rgba(0,0,0,0.4), 0 0 16px #3ba0ff;
+    position: relative;
+  }
+  .rider-pulse {
+    position: absolute; inset: -7px; border-radius: 50%;
+    border: 2px solid #3ba0ff; animation: riderPulse 1.8s ease-out infinite;
+  }
+  @keyframes riderPulse {
+    0%   { transform: scale(0.6); opacity: 0.9; }
+    100% { transform: scale(2.4); opacity: 0; }
+  }
+  .rider-badge {
+    position: absolute; top: 16px; left: 16px; z-index: 1000;
+    background: rgba(26,20,16,0.92); border: 1px solid #2a4a66;
+    border-left: 3px solid #3ba0ff; border-radius: 4px;
+    padding: 9px 13px; font-family: 'Barlow Condensed', sans-serif;
+    font-size: 13px; max-width: 230px; display: none;
+  }
+  .rider-badge.show { display: block; }
+  .rider-badge .rb-title { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #3ba0ff; margin-bottom: 4px; }
+  .rider-badge .rb-time { color: var(--paper); font-weight: 700; }
+  .rider-badge .rb-sub { color: rgba(240,235,225,0.5); font-size: 11px; }
+  .rider-badge .rb-center {
+    margin-top: 6px; display: inline-block; cursor: pointer;
+    color: #3ba0ff; font-size: 11px; letter-spacing: 1px;
+    text-transform: uppercase; border: 1px solid #2a4a66;
+    border-radius: 3px; padding: 2px 8px;
+  }
+  .rider-badge .rb-center:hover { background: rgba(59,160,255,0.12); }
+
+  /* ── PANNEAU ADMIN (caché par défaut, ouvert via #admin) ── */
+  .admin-panel {
+    position: fixed; bottom: 18px; right: 18px; z-index: 2000;
+    background: rgba(17,14,11,0.97); border: 1px solid #3a2e20;
+    border-top: 3px solid var(--trail); border-radius: 6px;
+    padding: 16px 18px; width: 290px; display: none;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.6);
+    font-family: 'Barlow', sans-serif;
+  }
+  .admin-panel.show { display: block; }
+  .admin-panel .ap-title {
+    font-family: 'Barlow Condensed', sans-serif; font-weight: 700;
+    font-size: 15px; color: var(--trail); text-transform: uppercase;
+    letter-spacing: 1px; margin-bottom: 4px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .admin-panel .ap-close { cursor: pointer; color: rgba(240,235,225,0.4); font-size: 18px; line-height: 1; }
+  .admin-panel .ap-hint { font-size: 11px; color: rgba(240,235,225,0.45); margin-bottom: 12px; line-height: 1.4; }
+  .admin-panel input {
+    width: 100%; background: #1a1410; border: 1px solid #3a2e20;
+    border-radius: 4px; color: var(--paper); padding: 8px 10px;
+    font-size: 13px; margin-bottom: 8px; font-family: 'Barlow', sans-serif;
+  }
+  .admin-panel button {
+    width: 100%; cursor: pointer; border: none; border-radius: 4px;
+    padding: 10px; font-size: 13px; font-weight: 600; letter-spacing: 0.5px;
+    font-family: 'Barlow Condensed', sans-serif; text-transform: uppercase;
+  }
+  .admin-panel .btn-primary { background: var(--trail); color: #fff; }
+  .admin-panel .btn-primary:hover { background: #f06a28; }
+  .admin-panel .btn-update { background: #3ba0ff; color: #fff; font-size: 15px; padding: 13px; }
+  .admin-panel .btn-update:hover { background: #57b0ff; }
+  .admin-panel .btn-update:disabled { background: #2a4a66; cursor: wait; }
+  .admin-panel .btn-ghost { background: transparent; color: rgba(240,235,225,0.5); border: 1px solid #3a2e20; margin-top: 8px; }
+  .admin-panel .ap-status { font-size: 12px; margin-top: 10px; line-height: 1.4; min-height: 16px; }
+  .admin-panel .ap-status.ok { color: #7bc49a; }
+  .admin-panel .ap-status.err { color: #e05c1a; }
+  .admin-panel .ap-status.info { color: rgba(240,235,225,0.55); }
+  .admin-section { display: none; }
+  .admin-section.show { display: block; }
+
+  /* ════════ RESPONSIVE / MOBILE ════════ */
+  @media (max-width: 860px) {
+    body { font-size: 15px; }
+
+    header {
+      flex-direction: column; align-items: flex-start; gap: 8px;
+      padding: 16px 18px 14px;
+    }
+    header::before { font-size: 110px; top: -8px; right: -4px; }
+    .header-title { font-size: 34px; }
+    .header-label { font-size: 10px; letter-spacing: 2px; }
+    .header-meta { margin-left: 0; text-align: left; }
+    .header-meta .big { font-size: 22px; }
+
+    /* Une seule colonne : carte en haut, étapes en dessous */
+    .container { grid-template-columns: 1fr; min-height: 0; }
+    .map-panel { order: -1; }
+    #map { min-height: 0; height: 58vh; }
+    .sidebar {
+      max-height: none; overflow: visible;
+      border-right: none; border-bottom: 1px solid #2a221a;
+    }
+
+    /* Détails d'étape moins indentés pour gagner de la largeur */
+    .day-detail { padding: 0 20px 16px 20px; }
+    .day-header { padding: 16px 18px 12px; gap: 12px; }
+    .day-num { font-size: 30px; min-width: 34px; }
+    .day-route { font-size: 16px; }
+    .route-summary { padding: 18px 18px 16px; }
+    .info-panel { padding: 18px 18px; }
+
+    /* Overlays carte compacts */
+    .map-overlay { top: 10px; right: 10px; padding: 9px 11px; max-width: 165px; font-size: 12px; }
+    .rider-badge { top: 10px; left: 10px; max-width: 190px; }
+    .map-legend { gap: 12px 16px; padding: 12px 14px; }
+    .map-legend span { display: none; } /* masque la note GPX sur petit écran */
+
+    /* Panneau admin pleine largeur en bas */
+    .admin-panel { left: 12px; right: 12px; bottom: 12px; width: auto; }
+  }
+
+  @media (max-width: 480px) {
+    .header-title { font-size: 28px; }
+    .day-pills { gap: 3px; }
+    .pill { font-size: 9px; padding: 2px 6px; }
+    #map { height: 52vh; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="header-label">Road trip moto · Tourisme routes de montagne</div>
+    <div class="header-title">Lyon <span>→</span> Roumanie</div>
+  </div>
+  <div class="header-meta">
+    <div class="big">~2 050 km</div>
+    <div class="small">Dim. après-midi → Ven. soir · BMW F900XR</div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+
+    <div class="route-summary">
+      <div class="stat"><div class="val">6</div><div class="lbl">Étapes</div></div>
+      <div class="stat"><div class="val">5</div><div class="lbl">Pays</div></div>
+      <div class="stat"><div class="val">mini</div><div class="lbl">Autoroute</div></div>
+    </div>
+
+    <!-- JOUR 1 -->
+    <div class="day-block active" onclick="selectDay(0)" id="day-0">
+      <div class="day-header">
+        <div class="day-num">J1</div>
+        <div class="day-info">
+          <div class="day-route">Lyon → Susa (Val di Susa)</div>
+          <div class="day-country">🇫🇷 France · 🇮🇹 Italie</div>
+        </div>
+        <div class="day-pills">
+          <span class="pill km">~290 km</span>
+          <span class="pill tet">Col du Mont-Cenis</span>
+        </div>
+      </div>
+      <div class="day-detail">
+        <div class="tet-section">
+          <div class="section-title">🏔️ Étape courte — départ dimanche ~13h</div>
+          <p>Sortie tranquille de Lyon vers Chambéry, puis la Maurienne par la D1006. Montée du <strong>Col du Mont-Cenis</strong> (2 083 m) : grands lacets, vue sur le lac, asphalte parfait pour la F900XR. Bascule en Italie vers Susa. Demi-journée volontairement légère pour absorber le départ d'après-midi sans rouler de nuit.</p>
+        </div>
+        <div class="camp-section">
+          <div class="section-title">🏕️ Bivouac / camping</div>
+          <p>Campings en Val di Susa : <strong>Camping Gran Bosco</strong> (Salbertrand) ou aires à Bardonecchia. Bivouac toléré côté français au-dessus de la limite des arbres autour du <strong>lac du Mont-Cenis</strong> (19h–9h, hors zones interdites).</p>
+        </div>
+        <div class="tips">
+          <div class="tip"><span class="tip-icon">⛽</span>Dernier plein « pas cher » côté français à Modane avant la frontière</div>
+          <div class="tip"><span class="tip-icon">🌡️</span>Au col, prévoir une couche : il peut faire 10 °C de moins qu'en plaine</div>
+          <div class="tip"><span class="tip-icon">🛣️</span>Alternative plus spectaculaire : voir le panneau « Alternatives » (Galibier / Briançon)</div>
+        </div>
+        <div class="night-badge">🏕️ Nuit Val di Susa (camping ou bivouac Mont-Cenis)</div>
+      </div>
+    </div>
+
+    <!-- JOUR 2 -->
+    <div class="day-block" onclick="selectDay(1)" id="day-1">
+      <div class="day-header">
+        <div class="day-num">J2</div>
+        <div class="day-info">
+          <div class="day-route">Susa → Lac de Garde / Trente</div>
+          <div class="day-country">🇮🇹 Italie</div>
+        </div>
+        <div class="day-pills">
+          <span class="pill km">~420 km</span>
+          <span class="pill road">Transit pré-Alpes</span>
+        </div>
+      </div>
+      <div class="day-detail">
+        <div class="tet-section">
+          <div class="section-title">🛣️ Traversée de la plaine du Pô (jour le plus « roulant »)</div>
+          <p>C'est l'étape de transit assumée : contournement de Turin, puis route le long du piémont alpin (Bergame, Brescia) vers le <strong>lac de Garde</strong>. Pour gagner du temps sans tout faire en nationale, un tronçon d'autoroute A4 est ici raisonnable (péage modéré). Récompense en fin de journée : la route panoramique de la rive ouest du lac de Garde (Gardesana Occidentale, tunnels et balcons sur l'eau).</p>
+        </div>
+        <div class="camp-section">
+          <div class="section-title">🏕️ Bivouac / camping</div>
+          <p>Zone très touristique → privilégier un camping. Nombreux choix à <strong>Riva del Garda</strong> / Nago-Torbole (Camping Bavaria, Camping Maroadi). Le camping sauvage est mal toléré autour du lac.</p>
+        </div>
+        <div class="tips">
+          <div class="tip"><span class="tip-icon">🌅</span>Viser Riva del Garda en fin d'après-midi pour rouler la Gardesana à la fraîche</div>
+          <div class="tip"><span class="tip-icon">💧</span>Grosses chaleurs possibles dans la plaine : hydratation + pauses</div>
+          <div class="tip"><span class="tip-icon">🅿️</span>Vignette autoroute non requise pour la moto en Italie (péage au ticket)</div>
+        </div>
+        <div class="night-badge">🏕️ Nuit Lac de Garde (Riva del Garda)</div>
+      </div>
+    </div>
+
+    <!-- JOUR 3 -->
+    <div class="day-block" onclick="selectDay(2)" id="day-2">
+      <div class="day-header">
+        <div class="day-num">J3</div>
+        <div class="day-info">
+          <div class="day-route">Garde → Dolomites → Bled</div>
+          <div class="day-country">🇮🇹 Italie · 🇸🇮 Slovénie</div>
+        </div>
+        <div class="day-pills">
+          <span class="pill km">~380 km</span>
+          <span class="pill tet">Dolomites + Vršič</span>
+        </div>
+      </div>
+      <div class="day-detail">
+        <div class="tet-section">
+          <div class="section-title">🏔️ La plus belle journée — cols mythiques</div>
+          <p>Le cœur du voyage. Montée vers les <strong>Dolomites</strong> : enchaînement Passo Pordoi (2 239 m), Passo Sella, Passo Falzarego — virages parfaits, décor UNESCO. Puis descente vers Tarvisio et passage en Slovénie par le <strong>col du Vršič</strong> (1 611 m, 50 épingles pavées par endroits) et la sublime <strong>vallée de la Soča</strong> aux eaux turquoise. Fin vers Bled.</p>
+        </div>
+        <div class="camp-section">
+          <div class="section-title">🏕️ Bivouac / camping</div>
+          <p>En Slovénie le bivouac est interdit mais toléré <em>hors</em> zones touristiques — <strong>évite Bled / Bohinj / parc du Triglav</strong> (amendes). Préfère un camping : <strong>Kamp Koren</strong> (Kobarid, Soča), Camping Bled, ou Camping Šobec (Lesce, le plus grand).</p>
+        </div>
+        <div class="tips">
+          <div class="tip"><span class="tip-icon">🅿️</span><strong>Vignette slovène obligatoire</strong> sur autoroutes/voies rapides — vignette moto 7 j ≈ 8 € (100 % digitale, achat en ligne avant la frontière)</div>
+          <div class="tip"><span class="tip-icon">⏱️</span>Journée lente (cols) : partir tôt, ne pas sous-estimer le temps dans les Dolomites</div>
+          <div class="tip"><span class="tip-icon">🚌</span>Cols dolomitiques chargés en été : doubler les bus/camping-cars avec prudence</div>
+        </div>
+        <div class="night-badge">🏕️ Nuit Bled / Soča (camping)</div>
+      </div>
+    </div>
+
+    <!-- JOUR 4 -->
+    <div class="day-block" onclick="selectDay(3)" id="day-3">
+      <div class="day-header">
+        <div class="day-num">J4</div>
+        <div class="day-info">
+          <div class="day-route">Bled → Lac Balaton</div>
+          <div class="day-country">🇸🇮 Slovénie · 🇭🇺 Hongrie</div>
+        </div>
+        <div class="day-pills">
+          <span class="pill km">~330 km</span>
+          <span class="pill road">Transit Hongrie</span>
+        </div>
+      </div>
+      <div class="day-detail">
+        <div class="tet-section">
+          <div class="section-title">🛣️ Bascule vers la plaine pannonienne</div>
+          <p>Dernières collines slovènes vinicoles (région de Maribor / Prekmurje) par les routes secondaires, puis entrée en Hongrie. Le relief s'aplatit : cap sur le <strong>lac Balaton</strong>, la « mer hongroise ». Petites routes le long de la rive nord (Tihany, vignobles de Badacsony) plus agréables que la voie rapide.</p>
+        </div>
+        <div class="camp-section">
+          <div class="section-title">🏕️ Bivouac / camping</div>
+          <p>Camping sauvage très restreint en Hongrie (24 h max, interdit dans les parcs nationaux, patrouillés). → camping officiel autour du Balaton : nombreux sites à <strong>Balatonfüred, Siófok, Keszthely</strong> (réseau Balatontourist).</p>
+        </div>
+        <div class="tips">
+          <div class="tip"><span class="tip-icon">🅿️</span><strong>e-vignette hongroise</strong> si tu prends les voies rapides : catégorie moto <strong>D1M</strong>, 10 j ≈ 12,7 € (achat en ligne, liée à la plaque)</div>
+          <div class="tip"><span class="tip-icon">🍷</span>Pause baignade possible au Balaton — eau peu profonde et tiède</div>
+          <div class="tip"><span class="tip-icon">📡</span>Roaming UE inclus en Slovénie et Hongrie (RLAH)</div>
+        </div>
+        <div class="night-badge">🏕️ Nuit Lac Balaton (camping)</div>
+      </div>
+    </div>
+
+    <!-- JOUR 5 -->
+    <div class="day-block" onclick="selectDay(4)" id="day-4">
+      <div class="day-header">
+        <div class="day-num">J5</div>
+        <div class="day-info">
+          <div class="day-route">Balaton → Est de la Hongrie (Gyula)</div>
+          <div class="day-country">🇭🇺 Hongrie</div>
+        </div>
+        <div class="day-pills">
+          <span class="pill km">~350 km</span>
+          <span class="pill road">Grande Plaine</span>
+        </div>
+      </div>
+      <div class="day-detail">
+        <div class="tet-section">
+          <div class="section-title">🌾 Traversée de la Puszta</div>
+          <p>Étape de positionnement avant la Roumanie : traversée de la Grande Plaine hongroise (Kecskemét, route 44) vers la frontière est. Paysages de plaine et fermes — peu de relief, mais des nationales tranquilles et rapides. Nuit à <strong>Gyula</strong>, jolie ville thermale à 20 min de la frontière, pour attaquer la Roumanie frais le lendemain.</p>
+        </div>
+        <div class="camp-section">
+          <div class="section-title">🏕️ Bivouac / camping</div>
+          <p>Camping <strong>Gyula</strong> (Thermal Camping Gyula) près des bains — pratique et confortable. Alternative nature : zones du parc national de Hortobágy plus au nord (bivouac interdit dans le parc lui-même).</p>
+        </div>
+        <div class="tips">
+          <div class="tip"><span class="tip-icon">⛽</span>Faire le plein côté hongrois : carburant souvent un peu moins cher qu'en Roumanie sur l'axe frontalier</div>
+          <div class="tip"><span class="tip-icon">💶</span>Retirer un peu de <strong>RON</strong> (lei roumains) ou prévoir la CB — l'euro n'est pas la monnaie en Roumanie</div>
+          <div class="tip"><span class="tip-icon">🛂</span>Frontière HU→RO : Schengen terrestre depuis le 1ᵉʳ janv. 2025, plus de contrôle systématique (garde tes papiers à portée)</div>
+        </div>
+        <div class="night-badge">🏕️ Nuit Gyula (camping thermal)</div>
+      </div>
+    </div>
+
+    <!-- JOUR 6 -->
+    <div class="day-block" onclick="selectDay(5)" id="day-5">
+      <div class="day-header">
+        <div class="day-num">J6</div>
+        <div class="day-info">
+          <div class="day-route">Gyula → Roumanie : Apuseni</div>
+          <div class="day-country">🇭🇺 Hongrie · 🇷🇴 Roumanie</div>
+        </div>
+        <div class="day-pills">
+          <span class="pill km">~290 km</span>
+          <span class="pill tet">Monts Apuseni</span>
+        </div>
+      </div>
+      <div class="day-detail">
+        <div class="tet-section">
+          <div class="section-title">🏁 Arrivée en Roumanie — vendredi soir</div>
+          <p>Passage de la frontière vers <strong>Oradea</strong>, puis montée dans les <strong>monts Apuseni</strong> par Beiuș et la DN76/DN75 : gorges, forêts, villages de bois et la belle route panoramique vers <strong>Arieșeni / Gârda de Sus</strong>. Arrivée en fin de journée au cœur des Carpates occidentales — objectif atteint, et porte d'entrée pour la suite du voyage.</p>
+        </div>
+        <div class="camp-section">
+          <div class="section-title">🏕️ Bivouac / camping</div>
+          <p>La Roumanie est <strong>très tolérante</strong> sur le bivouac (légal hors parcs/réserves et propriété privée, principe « leave no trace »). Belles prairies autour d'<strong>Arieșeni</strong> ; pensions et campings à Gârda de Sus. ⚠️ <strong>Ours</strong> dans les Carpates : nourriture en sacoche/étanche, jamais sous la tente.</p>
+        </div>
+        <div class="tips">
+          <div class="tip"><span class="tip-icon">🅿️</span><strong>Bonne nouvelle : la moto est EXEMPTÉE de rovinieta</strong> (vignette) en Roumanie — rien à acheter</div>
+          <div class="tip"><span class="tip-icon">🐑</span>Attention aux chiens de berger et au bétail sur les routes de montagne</div>
+          <div class="tip"><span class="tip-icon">🏔️</span>Pour prolonger : voir « Alternatives » — la Transalpina et la Transfăgărășan sont à 1–2 jours plus à l'est</div>
+        </div>
+        <div class="night-badge">🏁 Arrivée Apuseni / Arieșeni — Roumanie atteinte !</div>
+      </div>
+    </div>
+
+    <!-- PANEL: PAPIERS FRONTIÈRE -->
+    <div class="info-panel frontiere">
+      <div class="panel-title">🛂 Papiers à prendre avant le départ</div>
+      <div class="info-row"><strong>Indispensables (à avoir sur soi en permanence) :</strong></div>
+      <div class="info-row">• <strong>Carte d'identité OU passeport</strong> en cours de validité (passeport conseillé en réserve).<br>
+        • <strong>Permis de conduire</strong> (catégorie A).<br>
+        • <strong>Carte grise</strong> de la F900XR.<br>
+        • <strong>Attestation d'assurance</strong> + le <strong>mémo « carte verte »</strong> (désormais papier blanc ; non obligatoire entre pays UE mais à avoir).</div>
+      <div class="info-row" style="margin-top:6px;"><strong>Équipement moto (vérifié) :</strong></div>
+      <div class="info-row">• <strong>Casque homologué</strong> (ECE 22.05/22.06) : obligatoire partout.</div>
+      <div class="info-row">• <strong>Gants certifiés CE</strong> (norme EN 13594) : <strong>port obligatoire en France</strong> depuis le 20/11/2016 (amende 68 € + 1 point). Fortement conseillés partout ailleurs.</div>
+      <div class="info-row">• <strong>Gilet haute-visibilité</strong> : même principe partout → l'<strong>avoir</strong> et le <strong>porter si tu t'arrêtes sur la chaussée</strong> (panne/accident). 🇫🇷 La France est la seule à imposer en plus sa <strong>détention permanente</strong> à bord/sur soi pour les 2-roues (depuis le 1ᵉʳ janv. 2016) : 11 € si absent, 135 € si non porté lors d'un arrêt d'urgence. <em>Le port en roulant n'est pas obligatoire.</em></div>
+      <div class="info-row">• Trousse de secours / extincteur : exigences pensées pour les voitures (🇭🇺 🇷🇴), non appliquées en pratique à la moto.</div>
+      <div class="info-row" style="font-size:11px;color:rgba(240,235,225,0.42);margin-top:5px;">Sources : securite-routiere.gouv.fr (gilet & gants moto) · FFMC.</div>
+      <div class="info-row" style="margin-top:6px;"><strong>Zone Schengen continue :</strong> France → Roumanie est intégralement en Schengen terrestre depuis le 1ᵉʳ janv. 2025. Pas de contrôle systématique aux frontières, mais des contrôles ponctuels existent : garde tout accessible.</div>
+    </div>
+
+    <!-- PANEL: VIGNETTES -->
+    <div class="info-panel frontiere">
+      <div class="panel-title">🅿️ Vignettes & péages moto (résumé)</div>
+      <div class="flag-line"><span class="fl">🇫🇷</span><span><strong>France</strong> : péage au ticket si autoroute (évité ici).</span></div>
+      <div class="flag-line"><span class="fl">🇮🇹</span><span><strong>Italie</strong> : pas de vignette, péage au ticket. Pas requis hors autoroute.</span></div>
+      <div class="flag-line"><span class="fl">🇸🇮</span><span><strong>Slovénie</strong> : vignette <strong>obligatoire</strong> sur autoroute/voie rapide. Moto 7 j ≈ <strong>8 €</strong>, 100 % digitale (acheter en ligne avant la frontière).</span></div>
+      <div class="flag-line"><span class="fl">🇭🇺</span><span><strong>Hongrie</strong> : e-vignette catégorie moto <strong>D1M</strong>, 10 j ≈ <strong>12,7 €</strong>. Utile si tu empruntes les voies rapides.</span></div>
+      <div class="flag-line"><span class="fl">🇷🇴</span><span><strong>Roumanie</strong> : <strong>moto exemptée de rovinieta</strong> — rien à payer. 🎉</span></div>
+      <div class="info-row" style="margin-top:4px;">💡 En restant sur les routes secondaires (l'esprit du voyage), seules la vignette slovène et éventuellement la hongroise sont vraiment utiles. La slovène est quasi incontournable sur les liaisons.</div>
+    </div>
+
+    <!-- PANEL: BIVOUAC -->
+    <div class="info-panel bivouac">
+      <div class="panel-title">🏕️ Légalité du bivouac par pays</div>
+      <div class="flag-line"><span class="fl">🇫🇷</span><span><strong>France</strong> : bivouac toléré 19h–9h, surtout en montagne au-dessus des arbres ; règles spéciales en parcs nationaux.</span></div>
+      <div class="flag-line"><span class="fl">🇮🇹</span><span><strong>Italie</strong> : interdit en théorie, bivouac d'une nuit (coucher→lever du soleil) toléré en zones rurales/altitude ; éviter zones touristiques.</span></div>
+      <div class="flag-line"><span class="fl">🇸🇮</span><span><strong>Slovénie</strong> : interdit mais toléré hors spots fréquentés ; <strong>amendes</strong> autour de Bled/Bohinj/Triglav → camping conseillé.</span></div>
+      <div class="flag-line"><span class="fl">🇭🇺</span><span><strong>Hongrie</strong> : autorisé mais très restreint (24 h max), <strong>interdit dans les parcs nationaux</strong> patrouillés → camping conseillé.</span></div>
+      <div class="flag-line"><span class="fl">🇷🇴</span><span><strong>Roumanie</strong> : le plus permissif — toléré quasi partout hors parcs/réserves et propriété privée. Leave no trace, vigilance ours.</span></div>
+    </div>
+
+    <!-- PANEL: ALTERNATIVES / CHOIX -->
+    <div class="info-panel alt">
+      <div class="panel-title">⚖️ Alternatives — à toi de choisir</div>
+      <div class="info-row"><strong>1) J1 — Mont-Cenis vs Galibier/Briançon.</strong> Plus spectaculaire : Lyon → Col du Lautaret + <strong>Galibier</strong> (2 642 m) → Briançon → Montgenèvre → Susa. +1h environ et un peu plus au sud, mais l'un des plus beaux enchaînements des Alpes françaises.</div>
+      <div class="info-row"><strong>2) J3 — Dolomites « light » vs « full ».</strong> Si le timing serre, sauter Sella/Falzarego et ne garder que le Pordoi pour filer vers la Slovénie. Tu gagnes ~1h30.</div>
+      <div class="info-row"><strong>3) Variante Autriche (Grossglockner).</strong> Au lieu de Slovénie, passer par l'Autriche pour la <strong>Grossglockner Hochalpenstrasse</strong>. Magnifique, mais : vignette moto autrichienne en plus (~6–13 €) <em>+</em> péage spécifique Grossglockner (~30 €) et route plus au nord. Choix « col d'exception » contre budget/temps.</div>
+      <div class="info-row"><strong>4) Prolongation Carpates (les routes mythiques).</strong> Depuis l'Apuseni, 1–2 jours de plus pour la <strong>Transalpina</strong> (DN67C, ~2 145 m) et la <strong>Transfăgărășan</strong> (DN7C). ⚠️ Saison : la <strong>Transalpina</strong> ouvre en général en juin ; la <strong>Transfăgărășan</strong> ouvre souvent seulement vers fin juin / 1ᵉʳ juillet — <strong>vérifie l'ouverture avant</strong>. Si une seule est ouverte fin juin, ce sera la Transalpina.</div>
+    </div>
+
+  </aside>
+
+  <!-- MAP PANEL -->
+  <div class="map-panel">
+    <div id="map"></div>
+
+    <!-- Badge position pilote (visible par tous quand la position est publiée) -->
+    <div class="rider-badge" id="riderBadge">
+      <div class="rb-title">📍 Position du pilote</div>
+      <div class="rb-time" id="rbTime">—</div>
+      <div class="rb-sub" id="rbSub"></div>
+      <span class="rb-center" id="rbCenter">Centrer</span>
+    </div>
+
+    <div class="map-overlay">
+      <div class="ov-title">Résumé route</div>
+      <div class="ov-line"><span>Distance</span><strong>~2 050 km</strong></div>
+      <div class="ov-line"><span>Routes montagne</span><strong>~700 km</strong></div>
+      <div class="ov-line"><span>Liaisons / plaine</span><strong>~1 350 km</strong></div>
+      <div class="ov-line"><span>Pays traversés</span><strong>5</strong></div>
+      <div class="ov-line"><span>Durée</span><strong>Dim. PM → Ven. soir</strong></div>
+    </div>
+
+    <div class="map-legend">
+      <div class="legend-item">
+        <div class="legend-line" style="background:var(--trail);"></div>
+        Routes de montagne / cols
+      </div>
+      <div class="legend-item">
+        <div class="legend-line" style="background:var(--sky);"></div>
+        Liaison rapide / plaine
+      </div>
+      <div class="legend-item">
+        <div style="width:12px;height:12px;border-radius:50%;background:var(--trail);"></div>
+        Étape nuit
+      </div>
+      <div class="legend-item">
+        <div style="width:10px;height:10px;border-radius:50%;background:var(--warn);border:2px solid var(--warn);"></div>
+        Col / point d'intérêt
+      </div>
+      <span style="margin-left:auto;font-size:10px;letter-spacing:1px;color:rgba(240,235,225,0.2);">TRACÉ INDICATIF — affiner sur GPS / Calimoto / Kurviger</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- PANNEAU ADMIN — caché. S'ouvre en ajoutant #admin à l'URL -->
+<div class="admin-panel" id="adminPanel">
+  <div class="ap-title">Admin · Position <span class="ap-close" id="apClose">×</span></div>
+  <div class="ap-hint">Saisis ton mot de passe admin, puis publie ta position GPS actuelle. Elle apparaîtra pour tout le monde, avec la date.</div>
+  <input type="password" id="apToken" placeholder="Mot de passe admin" autocomplete="current-password">
+  <label style="display:flex;align-items:center;gap:7px;font-size:11px;color:rgba(240,235,225,0.5);margin-bottom:10px;cursor:pointer;">
+    <input type="checkbox" id="apRemember" style="width:auto;margin:0;"> Retenir sur cet appareil
+  </label>
+  <button class="btn-update" id="apUpdate">📍 Mettre à jour ma position</button>
+  <div class="ap-status info" id="apStatus"></div>
+</div>
+
+<script>
+// ── MAP INIT ──
+const map = L.map('map', {
+  center: [46.0, 14.0],
+  zoom: 6,
+  zoomControl: true,
+  attributionControl: false
+});
+
+// Dark tile layer
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+  attribution: '© OpenStreetMap © CARTO',
+  subdomains: 'abcd',
+  maxZoom: 19
+}).addTo(map);
+
+// Réajuste la carte si l'écran change (rotation mobile, redimensionnement)
+let _resizeT;
+window.addEventListener('resize', () => {
+  clearTimeout(_resizeT);
+  _resizeT = setTimeout(() => map.invalidateSize(), 200);
+});
+
+// ── WAYPOINTS (étapes nuit) ──
+const stops = [
+  { name: 'Lyon', coords: [45.748, 4.847], day: 'Départ J1 (dim. ~13h)', info: 'Point de départ', color: '#c8b89a' },
+  { name: 'Susa (Val di Susa)', coords: [45.137, 7.047], day: 'Nuit J1', info: '~290 km · Col du Mont-Cenis', color: '#e05c1a' },
+  { name: 'Lac de Garde (Riva del Garda)', coords: [45.886, 10.843], day: 'Nuit J2', info: '~420 km · transit pré-Alpes', color: '#e05c1a' },
+  { name: 'Bled', coords: [46.369, 14.114], day: 'Nuit J3', info: '~380 km · Dolomites + Vršič + Soča', color: '#e05c1a' },
+  { name: 'Lac Balaton', coords: [46.904, 18.057], day: 'Nuit J4', info: '~330 km · entrée Hongrie', color: '#e05c1a' },
+  { name: 'Gyula', coords: [46.645, 21.277], day: 'Nuit J5', info: '~350 km · Grande Plaine, près frontière RO', color: '#e05c1a' },
+  { name: 'Arieșeni (Apuseni)', coords: [46.491, 22.704], day: 'Arrivée J6 🏁 (ven. soir)', info: '~290 km · Oradea + monts Apuseni', color: '#3d6b4f' },
+];
+
+// ── ROUTE SEGMENTS ──
+// Liaison / plaine (bleu, pointillé)
+const liaisonSegments = [
+  // Plaine du Pô : Susa → Turin → Garde
+  [[45.137, 7.047], [45.07, 7.69], [45.43, 9.18], [45.54, 10.22], [45.886, 10.843]],
+  // Slovénie est → Hongrie → Balaton
+  [[46.369, 14.114], [46.55, 15.65], [46.66, 16.17], [46.84, 17.74], [46.904, 18.057]],
+  // Balaton → Grande Plaine → Gyula
+  [[46.904, 18.057], [46.91, 19.69], [46.75, 20.45], [46.645, 21.277]],
+  // Gyula → Oradea (passage frontière)
+  [[46.645, 21.277], [46.92, 21.92], [47.06, 21.93]],
+];
+
+// Routes de montagne / cols (orange)
+const mountainSegments = [
+  // Lyon → Mont-Cenis → Susa
+  [[45.748, 4.847], [45.567, 5.92], [45.49, 6.13], [45.2, 6.68], [45.255, 6.90], [45.137, 7.047]],
+  // Garde → Dolomites → Tarvisio → Vršič → Soča → Bled
+  [[45.886, 10.843], [46.07, 11.12], [46.487, 11.812], [46.54, 11.95], [46.62, 12.65], [46.50, 13.31], [46.434, 13.747], [46.338, 13.553], [46.25, 13.74], [46.369, 14.114]],
+  // Oradea → Apuseni → Arieșeni
+  [[47.06, 21.93], [46.67, 22.36], [46.55, 22.46], [46.491, 22.704]],
+];
+
+// Draw liaison lines
+liaisonSegments.forEach(seg => {
+  L.polyline(seg, {
+    color: '#4a7fa5',
+    weight: 2.5,
+    opacity: 0.7,
+    dashArray: '6 4'
+  }).addTo(map);
+});
+
+// Draw mountain lines
+mountainSegments.forEach(seg => {
+  L.polyline(seg, {
+    color: '#e05c1a',
+    weight: 3.5,
+    opacity: 0.85,
+  }).addTo(map);
+});
+
+// ── MARKERS ──
+function createMarker(stop) {
+  const isStart = stop.name === 'Lyon';
+  const isEnd = stop.name.indexOf('Arie') === 0;
+
+  const html = `
+    <div style="
+      width: ${isStart || isEnd ? 16 : 14}px;
+      height: ${isStart || isEnd ? 16 : 14}px;
+      border-radius: 50%;
+      background: ${stop.color};
+      border: 3px solid ${isEnd ? '#7bc49a' : (isStart ? '#c8b89a' : '#e05c1a')};
+      box-shadow: 0 0 0 3px rgba(0,0,0,0.5), 0 0 12px ${stop.color}66;
+    "></div>
+  `;
+
+  const icon = L.divIcon({ html, className: '', iconAnchor: [8, 8] });
+
+  const marker = L.marker(stop.coords, { icon }).addTo(map);
+  marker.bindPopup(`
+    <div class="popup-day">${stop.day}</div>
+    <div class="popup-route">${stop.name}</div>
+    <div class="popup-info">${stop.info}</div>
+  `, { maxWidth: 240 });
+
+  return marker;
+}
+
+stops.forEach(createMarker);
+
+// ── POI markers (cols / highlights) ──
+const pois = [
+  { coords: [45.255, 6.90], label: 'Col du Mont-Cenis\n(2 083 m)', color: '#c9a227' },
+  { coords: [46.487, 11.812], label: 'Passo Pordoi\n(Dolomites, 2 239 m)', color: '#c9a227' },
+  { coords: [46.434, 13.747], label: 'Col du Vršič\n(1 611 m)', color: '#c9a227' },
+  { coords: [46.30, 13.58], label: 'Vallée de la Soča', color: '#c9a227' },
+  { coords: [46.55, 22.46], label: 'Monts Apuseni', color: '#c9a227' },
+  // Prolongations possibles (Carpates)
+  { coords: [45.40, 23.66], label: 'Transalpina (option)\nouvre ~juin', color: '#7bc49a' },
+  { coords: [45.60, 24.62], label: 'Transfăgărășan (option)\nouvre ~fin juin/juil.', color: '#7bc49a' },
+];
+
+pois.forEach(poi => {
+  const html = `<div style="width:8px;height:8px;border-radius:50%;background:${poi.color};border:2px solid ${poi.color}99;box-shadow:0 0 6px ${poi.color}88;"></div>`;
+  const icon = L.divIcon({ html, className: '', iconAnchor: [4, 4] });
+  L.marker(poi.coords, { icon }).addTo(map)
+    .bindTooltip(poi.label, {
+      permanent: false,
+      direction: 'top',
+      className: 'tet-tooltip',
+      offset: [0, -6]
+    });
+});
+
+// ── DAY SELECTION ──
+const dayCoords = [
+  [45.748, 4.847],   // J1 Lyon (départ)
+  [45.137, 7.047],   // J1 nuit Susa
+  [45.886, 10.843],  // J2 Garde
+  [46.369, 14.114],  // J3 Bled
+  [46.904, 18.057],  // J4 Balaton
+  [46.645, 21.277],  // J5 Gyula
+  [46.491, 22.704],  // J6 Arieșeni
+];
+
+function selectDay(idx) {
+  const block = document.getElementById('day-' + idx);
+  const wasActive = block.classList.contains('active');
+  // referme toutes les étapes
+  document.querySelectorAll('.day-block').forEach(el => el.classList.remove('active'));
+  // clic sur une étape déjà ouverte → on la replie et on s'arrête
+  if (wasActive) return;
+  // sinon on ouvre celle-ci et on centre la carte
+  block.classList.add('active');
+  const target = dayCoords[idx + 1];
+  map.flyTo(target, 8, { duration: 1.2 });
+}
+
+// Tooltip style injection
+const style = document.createElement('style');
+style.textContent = `
+  .tet-tooltip {
+    background: rgba(26,20,16,0.95) !important;
+    border: 1px solid #3a2e20 !important;
+    color: #c9a227 !important;
+    font-family: 'Barlow Condensed', sans-serif !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.5px !important;
+    white-space: pre-line !important;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important;
+    padding: 6px 10px !important;
+  }
+  .tet-tooltip::before { display: none !important; }
+`;
+document.head.appendChild(style);
+
+// ════════════ POSITION DU PILOTE (Cloudflare Worker + KV) ════════════
+// Lecture publique : GET  /api/position   → { lat, lng, accuracy, updatedAt } ou null
+// Écriture admin   : POST /api/position   (en-tête x-admin-token = mot de passe)
+const API_URL = '/api/position';
+let riderMarker = null, riderPos = null;
+
+const riderBadge = document.getElementById('riderBadge');
+const rbTime = document.getElementById('rbTime');
+const rbSub  = document.getElementById('rbSub');
+
+function relTime(ts){
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60)    return "à l'instant";
+  if (s < 3600)  return 'il y a ' + Math.floor(s/60) + ' min';
+  if (s < 86400) return 'il y a ' + Math.floor(s/3600) + ' h';
+  return 'il y a ' + Math.floor(s/86400) + ' j';
+}
+
+function renderRider(pos){
+  if(!pos || typeof pos.lat !== 'number'){ riderBadge.classList.remove('show'); return; }
+  riderPos = pos;
+  const html = '<div class="rider-dot"><span class="rider-pulse"></span></div>';
+  const icon = L.divIcon({ html, className:'', iconAnchor:[9,9] });
+  if(!riderMarker){ riderMarker = L.marker([pos.lat,pos.lng],{icon, zIndexOffset:1000}).addTo(map); }
+  else { riderMarker.setLatLng([pos.lat,pos.lng]); riderMarker.setIcon(icon); }
+  const d = new Date(pos.updatedAt);
+  riderMarker.bindPopup('<div class="popup-day">📍 Pilote</div><div class="popup-info">Mise à jour : '+d.toLocaleString('fr-FR')+(pos.accuracy?'<br>± '+pos.accuracy+' m':'')+'</div>');
+  rbTime.textContent = 'MAJ ' + relTime(pos.updatedAt);
+  rbSub.textContent  = d.toLocaleString('fr-FR');
+  riderBadge.classList.add('show');
+}
+
+async function loadPosition(){
+  try{
+    const r = await fetch(API_URL, { cache:'no-store' });
+    if(!r.ok) return;                       // API pas encore déployée → on ignore
+    const ct = r.headers.get('content-type') || '';
+    if(ct.indexOf('application/json') === -1) return;
+    renderRider(await r.json());
+  }catch(e){ /* hors-ligne ou API absente : la carte reste normale */ }
+}
+
+document.getElementById('rbCenter').addEventListener('click', ()=>{
+  if(riderPos) map.flyTo([riderPos.lat, riderPos.lng], 9, { duration:1.2 });
+});
+
+// Lecture au chargement, puis rafraîchissement auto toutes les 60 s
+loadPosition();
+setInterval(loadPosition, 60000);
+setInterval(()=>{ if(riderPos) rbTime.textContent = 'MAJ ' + relTime(riderPos.updatedAt); }, 30000);
+
+// ── PANNEAU ADMIN (ouvert via #admin dans l'URL) ──
+const adminPanel = document.getElementById('adminPanel');
+const apStatus   = document.getElementById('apStatus');
+const apToken    = document.getElementById('apToken');
+const apRemember = document.getElementById('apRemember');
+function setStatus(msg, cls){ apStatus.textContent = msg; apStatus.className = 'ap-status ' + (cls||'info'); }
+
+// jeton mémorisé (optionnel) sur l'appareil
+try {
+  const saved = localStorage.getItem('rider_token');
+  if(saved){ apToken.value = saved; apRemember.checked = true; }
+} catch(e){}
+
+function openAdmin(){ adminPanel.classList.add('show'); }
+if(location.hash === '#admin') openAdmin();
+window.addEventListener('hashchange', ()=>{ if(location.hash === '#admin') openAdmin(); });
+document.getElementById('apClose').addEventListener('click', ()=>{
+  adminPanel.classList.remove('show');
+  if(location.hash === '#admin') history.replaceState(null, '', location.pathname);
+});
+
+document.getElementById('apUpdate').addEventListener('click', ()=>{
+  const token = apToken.value.trim();
+  if(!token){ setStatus('Saisis le mot de passe admin.', 'err'); return; }
+  try {
+    if(apRemember.checked) localStorage.setItem('rider_token', token);
+    else localStorage.removeItem('rider_token');
+  } catch(e){}
+
+  if(!navigator.geolocation){ setStatus('Géolocalisation indisponible sur ce navigateur.', 'err'); return; }
+  const btn = document.getElementById('apUpdate'); btn.disabled = true;
+  setStatus('Localisation en cours…', 'info');
+
+  navigator.geolocation.getCurrentPosition(async p=>{
+    const data = { lat:p.coords.latitude, lng:p.coords.longitude, accuracy:Math.round(p.coords.accuracy||0) };
+    try{
+      const r = await fetch(API_URL, {
+        method:'POST',
+        headers:{ 'content-type':'application/json', 'x-admin-token': token },
+        body: JSON.stringify(data)
+      });
+      if(r.status === 401){ setStatus('Mot de passe refusé.', 'err'); btn.disabled = false; return; }
+      if(!r.ok){ setStatus('Erreur serveur ('+r.status+').', 'err'); btn.disabled = false; return; }
+      renderRider(await r.json());
+      setStatus('Position publiée ✔ — visible par tous.', 'ok');
+    }catch(e){ setStatus('Échec réseau : '+e.message, 'err'); }
+    btn.disabled = false;
+  }, err=>{
+    setStatus('GPS refusé/indisponible ('+err.message+'). HTTPS requis.', 'err');
+    document.getElementById('apUpdate').disabled = false;
+  }, { enableHighAccuracy:true, timeout:15000, maximumAge:0 });
+});
+</script>
+</body>
+</html>
